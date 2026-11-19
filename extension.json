@@ -60,6 +60,12 @@
       ],
       "role": "test"
     },
+    "diffusion_gemma_block_test": {
+      "requires": [
+        "testing"
+      ],
+      "role": "test"
+    },
     "diffusion_gemma_kernels_hip_test": {
       "requires": [
         "hip",

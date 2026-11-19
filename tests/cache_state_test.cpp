@@ -130,12 +130,35 @@ void ReusableLength() {
   Expect(cache.Reuse(within) == 12, "Reuse agrees with the query");
 }
 
+// A restored frontier: the sliding layers hold the newest kept positions
+// and continue exactly as after encoding that many tokens.
+void RestoreLength() {
+  auto restored = Make();
+  restored.RestoreLength(20);
+  auto encoded = Make();
+  encoded.Append(Tokens(0, 20));
+  Expect(restored.length() == 20 && restored.sliding_valid() == 11,
+         "restored length and sliding rows");
+  Expect(restored.SlidingPass().first_slot == encoded.SlidingPass().first_slot &&
+             restored.SlidingPass().skip == encoded.SlidingPass().skip &&
+             restored.SlidingPass().first_position ==
+                 encoded.SlidingPass().first_position,
+         "restored sliding pass");
+  Expect(restored.GlobalPass().first_slot == 20, "restored global pass");
+  Expect(restored.ReusableLength(Tokens(0, 25)) == 0,
+         "restored tokens are unknown");
+  auto short_one = Make();
+  short_one.RestoreLength(5);
+  Expect(short_one.sliding_valid() == 5, "short restore keeps every row");
+}
+
 }  // namespace
 
 int main() {
   Appends();
   Reuse();
   ReusableLength();
+  RestoreLength();
   if (failures == 0)
     std::printf("diffusion_gemma_cache_state_test: OK\n");
   return failures == 0 ? 0 : 1;

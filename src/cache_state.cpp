@@ -81,6 +81,14 @@ CacheState::Shift CacheState::Append(std::span<const std::int32_t> tokens,
   return {.from = filled - keep, .count = keep};
 }
 
+void CacheState::RestoreLength(int length) {
+  length_ = length;
+  sliding_valid_ = std::min(length, sliding_keep());
+  // No token matches -1, so ReusableLength finds no common prefix.
+  tokens_.assign(static_cast<std::size_t>(length), -1);
+  images_.clear();
+}
+
 void CacheState::Clear() {
   length_ = 0;
   sliding_valid_ = 0;

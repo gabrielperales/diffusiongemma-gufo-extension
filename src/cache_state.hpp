@@ -61,6 +61,12 @@ public:
   Shift Append(std::span<const std::int32_t> tokens,
                std::span<const ImageSpan> images = {});
 
+  /// Sets the cache to hold positions [0, length) after their KV rows were
+  /// restored from elsewhere: the sliding layers then hold the newest
+  /// min(length, sliding_keep()) of them. Their tokens are not known, so a
+  /// later Reuse keeps nothing.
+  void RestoreLength(int length);
+
   void Clear();
 
 private:
