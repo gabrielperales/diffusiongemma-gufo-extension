@@ -61,7 +61,9 @@ if(TARGET gufo_diffusion_gemma_hip)
   )
   target_compile_options(gufo_diffusion_gemma_hip PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-O3>
-    $<$<COMPILE_LANGUAGE:HIP>:-O3;${GUFO_CLANG_OPTION}-ffp-contract=off;-Wno-unused-command-line-argument>
+    $<$<COMPILE_LANGUAGE:HIP>:-O3>
+    $<$<COMPILE_LANGUAGE:HIP>:${GUFO_CLANG_OPTION}-ffp-contract=off>
+    $<$<COMPILE_LANGUAGE:HIP>:-Wno-unused-command-line-argument>
   )
   target_include_directories(gufo_diffusion_gemma_hip PUBLIC
     "$<BUILD_INTERFACE:${GUFO_EXTENSION_BUILD_ROOT}>"
