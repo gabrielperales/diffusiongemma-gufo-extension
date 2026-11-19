@@ -14,6 +14,7 @@ void RegisterDiffusionGemmaCpu(ext::Registry& registry) {
       .probe = &ProbeDiffusionGemma,
       .probe_gguf = &ProbeDiffusionGemmaGguf,
       .create = nullptr,
+      .accepts_unsized_tensors = true,
   });
 }
 #endif

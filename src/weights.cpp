@@ -9,6 +9,7 @@
 #include <sstream>
 #include <stdexcept>
 
+#include <gufo/ext/gguf_reader.hpp>
 #include <gufo/ext/json.hpp>
 #include <gufo/ext/platform/mapped_file.hpp>
 #include "src/hip_check.hpp"
@@ -159,7 +160,16 @@ std::unordered_map<std::string, TensorEntry> ReadSafetensorsIndex(
 DeviceWeights::DeviceWeights(const std::filesystem::path& root,
                              const Config& c) {
   if (const auto gguf = FindGgufWeights(root); !gguf.empty()) {
-    LoadGguf(gguf, c);
+    std::string error;
+    const auto reader = core::GgufReader::OpenFile(
+        gguf, &error, {.allow_unsized_tensors = true});
+    if (!reader)
+      throw std::runtime_error("cannot open " + gguf.string() + ": " + error);
+    if (reader->GetMetadataString("diffusion_gemma.weights").value_or("") ==
+        kNvfp4GgufWeights)
+      LoadNvfp4(ReadNvfp4GgufIndex(gguf), c);  // NVIDIA's NVFP4, repacked
+    else
+      LoadGguf(gguf, c);  // llama.cpp Q8_0
   } else {
     const auto index = ReadSafetensorsIndex(root);
     if (index.contains(

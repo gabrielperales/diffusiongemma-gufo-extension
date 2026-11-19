@@ -570,7 +570,8 @@ std::shared_ptr<ext::TextModelRunner> CreateDiffusionGemmaRunner(
     std::shared_ptr<const core::GgufReader> reader = options.reader;
     if (gguf && !reader) {
       std::string open_error;
-      auto opened = core::GgufReader::OpenFile(root, &open_error);
+      auto opened = core::GgufReader::OpenFile(
+          root, &open_error, {.allow_unsized_tensors = true});
       if (!opened)
         return fail(open_error);
       reader = std::move(opened);

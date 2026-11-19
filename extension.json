@@ -79,6 +79,13 @@
       ],
       "role": "test"
     },
+    "diffusion_gemma_nvfp4_gguf_test": {
+      "requires": [
+        "hip",
+        "testing"
+      ],
+      "role": "test"
+    },
     "diffusion_gemma_run": {
       "requires": [
         "hip",

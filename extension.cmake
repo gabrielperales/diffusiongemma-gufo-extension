@@ -144,6 +144,24 @@ if(TARGET diffusion_gemma_kernels_hip_test)
 endif()
 
 gufo_extension_target(
+  NAME diffusion_gemma_nvfp4_gguf_test
+  SOURCES
+    tests/nvfp4_gguf_test.cpp
+  LINK_LIBRARIES
+    gufo_diffusion_gemma_hip
+    gufo_diffusion_gemma
+    gufo_ext_runtime
+    ${_gufo_diffusion_gemma_test_libs}
+)
+
+if(TARGET diffusion_gemma_nvfp4_gguf_test)
+  add_test(NAME diffusion_gemma.nvfp4_gguf
+    COMMAND diffusion_gemma_nvfp4_gguf_test)
+  set_tests_properties(diffusion_gemma.nvfp4_gguf PROPERTIES
+    LABELS "diffusion-gemma;external-model" SKIP_RETURN_CODE 77)
+endif()
+
+gufo_extension_target(
   NAME diffusion_gemma_run
   SOURCES
     tools/diffusion_gemma_run.cpp

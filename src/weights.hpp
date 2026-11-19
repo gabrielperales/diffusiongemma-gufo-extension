@@ -27,6 +27,16 @@ struct TensorEntry {
 std::unordered_map<std::string, TensorEntry> ReadSafetensorsIndex(
     const std::filesystem::path& root);
 
+/// `diffusion_gemma.weights` of a GGUF that tools/convert_nvfp4_gguf.py
+/// wrote: NVIDIA's NVFP4 tensors under their checkpoint names.
+inline constexpr const char* kNvfp4GgufWeights = "nvidia-modelopt-nvfp4-v1";
+
+/// The checkpoint tensors such a GGUF holds, as a safetensors index would
+/// list them. GGUF I8 tensors named *.weight_scale are F8_E4M3 block scales,
+/// every other I8 tensor packed E2M1 values (U8).
+std::unordered_map<std::string, TensorEntry> ReadNvfp4GgufIndex(
+    const std::filesystem::path& file);
+
 /// Reads a one-element BF16 tensor (a layer scalar) as float.
 float ReadBf16Scalar(const TensorEntry& tensor);
 /// Reads a one-element FP32 tensor (a quantization scale).

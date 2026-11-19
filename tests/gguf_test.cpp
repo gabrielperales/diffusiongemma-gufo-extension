@@ -36,7 +36,8 @@ int main() {
     return 77;
   }
   std::string error;
-  const auto reader = gufo::core::GgufReader::OpenFile(gguf, &error);
+  const auto reader = gufo::core::GgufReader::OpenFile(
+      gguf, &error, {.allow_unsized_tensors = true});
   if (!reader) {
     std::fprintf(stderr, "cannot open %s: %s\n", gguf, error.c_str());
     return 1;

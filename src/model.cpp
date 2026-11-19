@@ -122,7 +122,8 @@ struct Model::Impl {
       // A llama.cpp GGUF: architecture, sampler settings and tokenizer from
       // its metadata.
       std::string error;
-      const auto reader = core::GgufReader::OpenFile(root, &error);
+      const auto reader = core::GgufReader::OpenFile(
+          root, &error, {.allow_unsized_tensors = true});
       if (!reader)
         throw std::runtime_error("cannot open " + root.string() + ": " + error);
       config = LoadConfigGguf(*reader);

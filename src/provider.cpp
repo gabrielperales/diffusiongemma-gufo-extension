@@ -15,5 +15,7 @@ void diffusion_gemma_provider_register(gufo::ext::Registry& registry) {
       .probe = &gufo::models::diffusion_gemma::ProbeDiffusionGemma,
       .probe_gguf = &gufo::models::diffusion_gemma::ProbeDiffusionGemmaGguf,
       .create = &gufo::models::diffusion_gemma::CreateDiffusionGemmaRunner,
+      // The NVFP4 GGUF stores its packed values and scales as I8 bytes.
+      .accepts_unsized_tensors = true,
   });
 }

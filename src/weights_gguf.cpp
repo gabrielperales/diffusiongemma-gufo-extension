@@ -58,6 +58,54 @@ std::filesystem::path FindGgufWeights(const std::filesystem::path& root) {
   return found;
 }
 
+std::unordered_map<std::string, TensorEntry> ReadNvfp4GgufIndex(
+    const std::filesystem::path& file) {
+  std::string error;
+  // The I8 tensors are sized by the extension, not by Gufo's core.
+  const auto reader = core::GgufReader::OpenFile(
+      file, &error, {.allow_unsized_tensors = true});
+  if (!reader)
+    throw std::runtime_error("cannot open " + file.string() + ": " + error);
+  if (reader->GetMetadataString("diffusion_gemma.weights").value_or("") !=
+      kNvfp4GgufWeights)
+    throw std::runtime_error(file.string() + " is not an NVFP4 GGUF");
+  const auto regions = reader->GetMappedRegions();
+  if (regions.size() != 1)
+    throw std::runtime_error("NVFP4 GGUF must be a single file");
+  const auto* base = static_cast<const std::uint8_t*>(regions[0].data);
+  constexpr std::uint32_t kI8 = 24;
+  std::unordered_map<std::string, TensorEntry> index;
+  for (const auto& t : reader->GetTensors()) {
+    TensorEntry entry;
+    entry.file = file;
+    entry.offset = static_cast<std::uint64_t>(
+        static_cast<const std::uint8_t*>(t.data) - base);
+    std::uint64_t elements = 1;
+    for (auto d = t.dimensions.rbegin(); d != t.dimensions.rend(); ++d) {
+      entry.shape.push_back(static_cast<std::int64_t>(*d));
+      elements *= *d;
+    }
+    const std::string name(t.name);
+    if (t.type == core::GgmlType::kBF16) {
+      entry.dtype = "BF16";
+      entry.bytes = elements * 2;
+    } else if (t.type == core::GgmlType::kF32) {
+      entry.dtype = "F32";
+      entry.bytes = elements * 4;
+    } else if (static_cast<std::uint32_t>(t.type) == kI8) {
+      entry.dtype = name.ends_with(".weight_scale") ? "F8_E4M3" : "U8";
+      entry.bytes = elements;
+    } else {
+      throw std::runtime_error("NVFP4 GGUF tensor " + name +
+                               " has an unexpected type");
+    }
+    if (entry.bytes > t.size_bytes)
+      throw std::runtime_error("NVFP4 GGUF tensor " + name + " is truncated");
+    index.emplace(name, std::move(entry));
+  }
+  return index;
+}
+
 void DeviceWeights::LoadGguf(const std::filesystem::path& file,
                              const Config& c) {
   std::string error;
