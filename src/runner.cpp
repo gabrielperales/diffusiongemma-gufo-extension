@@ -34,6 +34,7 @@
 #include "src/continuation.hpp"
 #include "src/denoise.hpp"
 #include "src/model.hpp"
+#include "src/tool_dialect.hpp"
 
 namespace gufo::models::diffusion_gemma {
 namespace {
@@ -109,6 +110,8 @@ std::string RenderRequest(const ChatRequest& request) {
         break;
     }
     out.content = message.content;
+    // Server-authored instructions that follow system or developer content.
+    out.content += message.framing_suffix;
     out.tool_call_id = message.tool_call_id;
     out.name = message.name;
     for (const auto& call : message.tool_calls) {
@@ -215,8 +218,32 @@ public:
     return plans;
   }
 
-  // No constraint vocabulary: the host refuses structured output, which
-  // the diffusion sampler cannot follow token by token.
+  // The host binds a tool-call grammar to every request with tools, so the
+  // runner offers a constraint vocabulary. The diffusion sampler cannot
+  // follow a grammar token by token: calls are read back from the text by
+  // the dialect, as in Bubo. Structured output, which would need the
+  // grammar, is refused in PreparePrompt.
+  std::shared_ptr<const sampling::ConstraintVocabulary>
+  BuildConstraintVocabulary() const override {
+    const auto& c = model_->config();
+    return std::make_shared<const sampling::ConstraintVocabulary>(
+        VocabularySize(), [this, &c](std::uint32_t id) {
+          const bool stop = std::find(c.eos_ids.begin(), c.eos_ids.end(),
+                                      static_cast<int>(id)) != c.eos_ids.end();
+          return sampling::ConstraintVocabulary::Piece{Piece(id), stop};
+        });
+  }
+
+  std::string ToolDialectId() const override {
+    return std::string(kToolDialectId);
+  }
+
+  std::optional<TextPreparedPrompt> PreparePrompt(
+      const ChatRequest& request) const override {
+    if (request.response_format)
+      throw std::invalid_argument("model does not support structured output");
+    return TextModelRunner::PreparePrompt(request);
+  }
 
   ReasoningTags ReasoningBudgetTags() const override {
     return {"<|channel>", "<channel|>", {"<channel|>"}};

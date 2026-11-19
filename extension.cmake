@@ -17,6 +17,7 @@ gufo_extension_target(
     src/image_prompt.cpp
     src/read.cpp
     src/block.cpp
+    src/tool_dialect.cpp
     src/extension.cpp
   LINK_LIBRARIES
     gufo_ext_runtime
@@ -105,7 +106,7 @@ if(ENGINE_ENABLE_HIP)
   list(APPEND _gufo_diffusion_gemma_test_libs gufo_ext_hip)
 endif()
 
-foreach(_dg_test config chat tokenizer denoise cache_state image_chat block gguf)
+foreach(_dg_test config chat tokenizer denoise cache_state image_chat block gguf tool_dialect)
   gufo_extension_target(
     NAME diffusion_gemma_${_dg_test}_test
     SOURCES

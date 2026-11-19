@@ -2,6 +2,7 @@
 #include <gufo/ext/text.hpp>
 
 #include "src/probe.hpp"
+#include "src/tool_dialect.hpp"
 
 namespace gufo::models::diffusion_gemma {
 
@@ -22,6 +23,8 @@ void RegisterDiffusionGemmaCpu(ext::Registry& registry) {
 }  // namespace gufo::models::diffusion_gemma
 
 void diffusion_gemma_register(gufo::ext::Registry& registry) {
+  // Before any runner exists, as the dialect registry requires.
+  gufo::models::diffusion_gemma::RegisterToolDialect();
 #if !defined(ENGINE_ENABLE_HIP)
   gufo::models::diffusion_gemma::RegisterDiffusionGemmaCpu(registry);
 #else

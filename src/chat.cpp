@@ -796,6 +796,15 @@ std::string NativeToolCallsToXml(std::string_view text, std::size_t* held,
   }
 }
 
+std::optional<json::Value> ParseNativeValue(std::string_view text,
+                                            std::size_t* consumed) {
+  CallParser parser(text);
+  auto value = parser.Value();
+  if (value)
+    *consumed = parser.Position();
+  return value;
+}
+
 std::string StripThinking(const std::string& text) {
   const auto open = text.find("<|channel>");
   if (open == std::string::npos)

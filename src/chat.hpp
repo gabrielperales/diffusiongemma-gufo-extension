@@ -2,6 +2,7 @@
 #define DIFFUSION_GEMMA_EXT_CHAT_HPP_
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -53,6 +54,13 @@ std::string FormatToolDeclaration(const json::Value& tool);
 /// such as a fenced example without a closer, stays text.
 std::string NativeToolCallsToXml(std::string_view text, std::size_t* held,
                                  std::span<const std::string> tools = {});
+
+/// Parses one value in the native call syntax (strings between <|"|>,
+/// unquoted keys, JSON-like numbers, literals, objects and arrays) at the
+/// start of `text`. Returns nullopt when it is incomplete or malformed;
+/// otherwise sets `*consumed` to the bytes it spans.
+std::optional<json::Value> ParseNativeValue(std::string_view text,
+                                            std::size_t* consumed);
 
 /// Removes a leading thinking channel (`<|channel>...<channel|>`) from
 /// generated text; returns the text unchanged when there is none.
