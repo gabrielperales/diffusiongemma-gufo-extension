@@ -4,5 +4,9 @@ a fork of Gufo, under the MIT License ("Copyright (c) 2026 gufo
 contributors"). Ported files keep their structure; changes adapt them to the
 public Gufo extension API.
 
+src/continuation.cpp adapts the continuation adapter of the LFM3 extension
+(https://github.com/gufo-org/lfm3-gufo-extension, MIT License, "Copyright
+(c) 2026 gufo contributors").
+
 Model weights are not part of this repository. DiffusionGemma weights carry
 their own license (see the model card of the checkpoint you use).

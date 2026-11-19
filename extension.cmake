@@ -72,14 +72,20 @@ if(TARGET gufo_diffusion_gemma_hip)
   )
 endif()
 
-# The text provider (phase 4 adds the runner and drivers).
+# The continuation adapter, the text runner and the provider.
 gufo_extension_target(
   NAME gufo_diffusion_gemma_text
   SOURCES
+    src/continuation.cpp
+    src/runner.cpp
     src/provider.cpp
   LINK_LIBRARIES
     gufo_diffusion_gemma_hip
     gufo_diffusion_gemma
+    gufo_ext_cache
+    # runner.cpp hashes with <gufo/ext/sha256.hpp>, whose header includes
+    # <openssl/evp.h>; gufo_ext_core carries OpenSSL::Crypto and the hasher.
+    gufo_ext_core
     gufo_ext_runtime
 )
 
