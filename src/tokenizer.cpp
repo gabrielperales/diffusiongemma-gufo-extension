@@ -175,13 +175,26 @@ Tokenizer::Tokenizer(const core::GgufReader& reader) {
                         static_cast<std::uint32_t>(m->second));
   }
 
-  // llama.cpp token type 3 is a control token: matched before BPE, and
-  // dropped when decoding with skip_special.
-  constexpr std::int64_t kControl = 3;
+  // The special tokens of tokenizer.json, matched before BPE and dropped
+  // when decoding with skip_special. GGUF writers type them inconsistently
+  // (control, user-defined, even normal), so a token is special when it is
+  // typed control (3) or user-defined (4), or is shaped like a Gemma 4
+  // marker: <|x>, <x|> or <|x|>. <s> and </s> are typed control but are
+  // text in tokenizer.json.
+  constexpr std::int64_t kControl = 3, kUserDefined = 4;
+  const auto marker = [](std::string_view p) {
+    return p.size() >= 3 && p.front() == '<' && p.back() == '>' &&
+           (p.starts_with("<|") || p.ends_with("|>")) &&
+           p.find_first_of(" \t\n\r") == std::string_view::npos &&
+           std::count(p.begin(), p.end(), '<') == 1 &&
+           std::count(p.begin(), p.end(), '>') == 1;
+  };
   special_.assign(pieces_.size(), false);
   for (std::size_t id = 0; id < pieces_.size(); ++id) {
-    if ((*types)[id] != kControl || pieces_[id] == "<s>" ||
-        pieces_[id] == "</s>")
+    const std::string_view piece = pieces_[id];
+    const auto type = (*types)[id];
+    if (!(type == kControl || type == kUserDefined || marker(piece)) ||
+        piece == "<s>" || piece == "</s>")
       continue;
     added_.emplace_back(pieces_[id], static_cast<std::int32_t>(id));
     special_[id] = true;

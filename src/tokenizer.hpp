@@ -24,9 +24,8 @@ class Tokenizer {
 public:
   explicit Tokenizer(const std::filesystem::path& root);
   /// The same tokenizer from a llama.cpp GGUF's tokenizer.ggml.* metadata:
-  /// tokens, merges and token types. Control tokens are the added tokens of
-  /// tokenizer.json, except <s> and </s>, which the GGUF marks as control
-  /// but the checkpoint's tokenizer encodes as text.
+  /// tokens, merges and token types. The special tokens are those of
+  /// tokenizer.json however the GGUF types them (see the definition).
   explicit Tokenizer(const core::GgufReader& reader);
 
   [[nodiscard]] std::vector<std::int32_t> Encode(std::string_view text) const;

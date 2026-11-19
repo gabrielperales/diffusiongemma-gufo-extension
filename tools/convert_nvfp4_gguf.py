@@ -169,6 +169,25 @@ def read_checkpoint(root):
     return tensors
 
 
+def token_types(root, entries):
+    """tokenizer.ggml.token_type from the checkpoint's tokenizer.json: control
+    (3) for its special added tokens, byte (6) for <0xXX>, normal (1) else.
+    Reference GGUFs type the specials inconsistently."""
+    tokenizer = json.load(open(os.path.join(root, "tokenizer.json"), encoding="utf-8"))
+    vocab = tokenizer["model"]["vocab"]
+    special = {t["id"] for t in tokenizer["added_tokens"] if t.get("special")}
+    count = struct.unpack("<Q", entries["tokenizer.ggml.tokens"][1][4:12])[0]
+    if count != len(vocab):
+        raise SystemExit("reference vocabulary differs from tokenizer.json")
+    types = [1] * count
+    for piece, i in vocab.items():
+        if len(piece) == 6 and piece.startswith("<0x") and piece.endswith(">"):
+            types[i] = 6
+    for i in special:
+        types[i] = 3
+    return struct.pack("<IQ", 5, count) + struct.pack(f"<{count}i", *types)
+
+
 def pack_string(s):
     data = s.encode()
     return struct.pack("<Q", len(data)) + data
@@ -204,9 +223,12 @@ def main():
           kv_string("diffusion_gemma.source.repo", args.source_repo)]
     if args.source_revision:
         kv.append(kv_string("diffusion_gemma.source.revision", args.source_revision))
+    types = token_types(args.checkpoint, entries)
     for key, (value_type, raw) in entries.items():
         if key in DROPPED_KEYS:
             continue
+        if key == "tokenizer.ggml.token_type":
+            value_type, raw = T_ARRAY, types
         kv.append(pack_string(key) + struct.pack("<I", value_type) + raw)
 
     # Tensor infos: rope_freqs first, then the checkpoint's in name order.
