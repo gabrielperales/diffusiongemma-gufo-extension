@@ -8,6 +8,12 @@ gufo_extension_target(
   SOURCES
     src/config.cpp
     src/probe.cpp
+    src/tokenizer.cpp
+    src/chat.cpp
+    src/image_chat.cpp
+    src/denoise.cpp
+    src/cache_state.cpp
+    src/image_prompt.cpp
     src/extension.cpp
   LINK_LIBRARIES
     gufo_ext_runtime
@@ -46,21 +52,24 @@ if(ENGINE_ENABLE_HIP)
   list(APPEND _gufo_diffusion_gemma_test_libs gufo_ext_hip)
 endif()
 
-gufo_extension_target(
-  NAME diffusion_gemma_config_test
-  SOURCES
-    tests/config_test.cpp
-  LINK_LIBRARIES
-    gufo_diffusion_gemma
-    gufo_ext_runtime
-    ${_gufo_diffusion_gemma_test_libs}
-)
-
-if(TARGET diffusion_gemma_config_test)
-  add_test(NAME diffusion_gemma.config COMMAND diffusion_gemma_config_test)
-  set_tests_properties(diffusion_gemma.config PROPERTIES
-    LABELS "diffusion-gemma;cpu" SKIP_RETURN_CODE 77)
-endif()
+foreach(_dg_test config chat tokenizer denoise cache_state image_chat)
+  gufo_extension_target(
+    NAME diffusion_gemma_${_dg_test}_test
+    SOURCES
+      tests/${_dg_test}_test.cpp
+    LINK_LIBRARIES
+      gufo_diffusion_gemma
+      gufo_ext_runtime
+      ${_gufo_diffusion_gemma_test_libs}
+  )
+  if(TARGET diffusion_gemma_${_dg_test}_test)
+    add_test(NAME diffusion_gemma.${_dg_test}
+      COMMAND diffusion_gemma_${_dg_test}_test)
+    # The tokenizer test needs DIFFUSION_GEMMA_MODEL and skips (77) without.
+    set_tests_properties(diffusion_gemma.${_dg_test} PROPERTIES
+      LABELS "diffusion-gemma;cpu" SKIP_RETURN_CODE 77)
+  endif()
+endforeach()
 
 install(FILES
   "${GUFO_EXTENSION_BUILD_ROOT}/LICENSE"

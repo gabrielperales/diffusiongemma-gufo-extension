@@ -4,13 +4,57 @@
   "version": "0.1.0",
   "api_version": ">= 0.3.21",
   "depends": [],
-  "platforms": ["windows", "linux"],
+  "platforms": [
+    "windows",
+    "linux"
+  ],
   "entry": "diffusion_gemma_register",
   "registration_target": "gufo_diffusion_gemma",
   "targets": {
-    "gufo_diffusion_gemma": { "requires": [] },
-    "gufo_diffusion_gemma_text": { "requires": ["hip"] },
-    "diffusion_gemma_config_test": { "requires": ["testing"], "role": "test" }
+    "gufo_diffusion_gemma": {
+      "requires": []
+    },
+    "gufo_diffusion_gemma_text": {
+      "requires": [
+        "hip"
+      ]
+    },
+    "diffusion_gemma_config_test": {
+      "requires": [
+        "testing"
+      ],
+      "role": "test"
+    },
+    "diffusion_gemma_chat_test": {
+      "requires": [
+        "testing"
+      ],
+      "role": "test"
+    },
+    "diffusion_gemma_tokenizer_test": {
+      "requires": [
+        "testing"
+      ],
+      "role": "test"
+    },
+    "diffusion_gemma_denoise_test": {
+      "requires": [
+        "testing"
+      ],
+      "role": "test"
+    },
+    "diffusion_gemma_cache_state_test": {
+      "requires": [
+        "testing"
+      ],
+      "role": "test"
+    },
+    "diffusion_gemma_image_chat_test": {
+      "requires": [
+        "testing"
+      ],
+      "role": "test"
+    }
   },
   "providers": [
     {
@@ -20,11 +64,16 @@
         "safetensors:diffusion_gemma",
         "safetensors:DiffusionGemmaForBlockDiffusion"
       ],
-      "model_ids": ["diffusiongemma-26b-a4b-it", "diffusiongemma-26b"],
+      "model_ids": [
+        "diffusiongemma-26b-a4b-it",
+        "diffusiongemma-26b"
+      ],
       "target": "gufo_diffusion_gemma_text",
       "entry": "diffusion_gemma_provider_register"
     }
   ],
   "options": [],
-  "licenses": ["LICENSE"]
+  "licenses": [
+    "LICENSE"
+  ]
 }

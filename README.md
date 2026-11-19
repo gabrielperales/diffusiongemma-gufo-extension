@@ -6,7 +6,7 @@ Strix Halo (gfx1151). The model code is ported from
 [Bubo](https://github.com/haloforge-labs/bubo), a Gufo fork that runs it
 natively on Windows (see NOTICE).
 
-**Status: phase 1 of 8 (scaffold).** The extension recognises a checkpoint
+**Status: phase 2 of 8 (host code).** The extension recognises a checkpoint
 directory but does not run it yet.
 
 | | |
@@ -50,7 +50,7 @@ ctest --preset cpu-test -R '^diffusion_gemma\.'
 
 0. Gufo built from source; Bubo reference outputs (logits, seeded replies).
 1. Scaffold, manifest, probe, config. **(done)**
-2. Host code: tokenizer, Gemma 4 chat template and tool syntax, sampler, cache bookkeeping.
+2. Host code: tokenizer, chat framing, image placeholders, sampler decisions, cache bookkeeping. **(done)**
 3. HIP kernels and NVFP4 weight loading.
 4. `TextModelRunner`: prefill, block decode, batching, component cache.
 5. Gemma 4 tool dialect (tolerant of a missing opening marker).
