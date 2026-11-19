@@ -6,7 +6,7 @@ Strix Halo (gfx1151). The model code is ported from
 [Bubo](https://github.com/haloforge-labs/bubo), a Gufo fork that runs it
 natively on Windows (see NOTICE).
 
-**Status: phase 4 of 8 (serving through `gufo serve llm`).** The extension recognises a checkpoint
+**Status: phase 5 of 8 (serving with tool calls through `gufo serve llm`).** The extension recognises a checkpoint
 directory but does not run it yet.
 
 | | |
@@ -54,7 +54,8 @@ to 48 steps), commits it through the causal encoder and returns its tokens.
 goes through the causal encoder in `Prefill`. Global-layer KV rows are
 append-only cache components; the sliding-window KV is private state.
 
-Not available in v1: JSON-constrained output (`response_format`), Bubo's
+Tool calls use Gemma 4's native syntax through the `diffusion-gemma-native`
+dialect. Not available in v1: JSON-constrained output (`response_format`), Bubo's
 `diffusion_*` read fields (they need Gufo HTTP support) and speculative
 decoding.
 
@@ -81,7 +82,7 @@ ctest --preset cpu-test -R '^diffusion_gemma\.'
 2. Host code: tokenizer, chat framing, image placeholders, sampler decisions, cache bookkeeping. **(done)**
 3. HIP kernels and NVFP4 weight loading. **(done)**
 4. `TextModelRunner`: prefill, block decode, batching, component cache. **(serving; drivers pending)**
-5. Gemma 4 tool dialect (tolerant of a missing opening marker).
+5. Gemma 4 tool dialect. **(done)** Calls are read from the text: the diffusion sampler cannot follow a tool grammar, so `tool_choice: required` and `strict` are best effort.
 6. Vision through the Gemma 4 encoder and `--mmproj`.
 7. Drivers, conformance, benchmarks against Bubo.
 8. Release, registry review, llama-swap switch-over.
