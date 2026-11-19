@@ -12,11 +12,12 @@ namespace {
 // distinct streams (as in Bubo's Engine).
 constexpr std::uint64_t kBlockSeedStride = 0x1000193ULL;
 
-/// Starts the generation's next canvas; false when it would not fit the
-/// context.
+/// Starts the generation's next canvas; false when the context is full.
+/// The last canvas may run past the context: the KV caches hold one canvas
+/// beyond it, and the budget keeps the reply within the context.
 bool StartBlock(BlockGeneration& g, const Config& c, int cached,
                 int max_context) {
-  if (cached + c.canvas > max_context)
+  if (cached >= max_context)
     return false;
   g.block_seed = MixSeed(g.seed + kBlockSeedStride * (g.block + 1));
   // The canvas starts as random tokens; rows not accepted at a step are

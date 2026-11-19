@@ -327,8 +327,8 @@ public:
          max_input_tokens, prompt.size() - offset});
     if (count == 0)
       throw std::invalid_argument("DiffusionGemma prefill budget is zero");
-    // A reply needs room for at least one canvas after the prompt.
-    if (offset + count + model_->config().canvas > context_)
+    // A reply needs room for at least one token after the prompt.
+    if (offset + count >= context_)
       throw std::length_error(
           "prompt of " + std::to_string(prompt.size()) +
           " tokens leaves no room for a reply in the context of " +
@@ -463,9 +463,16 @@ private:
     std::vector<int> cached, budgets;
     for (const auto i : live) {
       generations.push_back(&states[i]->generation);
-      cached.push_back(states[i]->session->cache.length());
-      budgets.push_back(static_cast<int>(
-          std::min<std::size_t>(max_tokens[i], static_cast<std::size_t>(INT_MAX))));
+      const int length = states[i]->session->cache.length();
+      cached.push_back(length);
+      // The reply so far and this block stay within the context (the host
+      // caps max_tokens likewise; this guards other callers).
+      const auto& g = states[i]->generation;
+      const auto pending = g.commit_pending ? c.canvas : 0;
+      const auto room = static_cast<std::size_t>(std::max<long long>(
+          0, static_cast<long long>(context_) - length - pending));
+      budgets.push_back(static_cast<int>(std::min<std::size_t>(
+          {max_tokens[i], room, static_cast<std::size_t>(INT_MAX)})));
     }
     const auto forward = [&](std::span<const BlockStep> block_steps,
                              std::span<const BlockCommit> commits) {

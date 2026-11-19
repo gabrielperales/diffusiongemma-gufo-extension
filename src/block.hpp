@@ -90,7 +90,8 @@ struct BlockOutcome {
 /// steps (and any pending commits) into shared forward passes, until each
 /// block has converged or reached the step limit. `cached[i]` is generation
 /// i's cache length before its pending commit; `budgets[i]` the most tokens
-/// it may still return. `cancelled(i)`, when set, is polled between passes.
+/// it may still return, which must keep the reply within `max_context` (a
+/// block starts while the cache is below it). `cancelled(i)`, when set, is polled between passes.
 std::vector<BlockOutcome> RunBlocks(
     const Config& config, int max_context,
     std::span<BlockGeneration* const> generations,

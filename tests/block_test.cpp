@@ -113,15 +113,28 @@ int main() {
     Check(!g.commit_pending, "cut block is not committed");
   }
 
-  // A block that does not fit the context is refused, with no pass.
+  // A full context starts no block, with no pass.
   {
     dg::BlockGeneration g;
     dg::BeginGeneration(g, c, d, 7, false);
     FakeForward fake{.answers = {{5, 6, 7, 8}}};
     dg::BlockGeneration* gens[] = {&g};
-    const int cached[] = {98}, budget[] = {100};
+    const int cached[] = {100}, budget[] = {100};
     const auto out = dg::RunBlocks(c, 100, gens, cached, budget, Bind(fake));
     Check(out[0].context_full && fake.passes == 0, "context full");
+  }
+
+  // The last block may run past the context; its budget keeps the reply in.
+  {
+    dg::BlockGeneration g;
+    dg::BeginGeneration(g, c, d, 7, false);
+    FakeForward fake{.answers = {{5, 6, 7, 8}}};
+    dg::BlockGeneration* gens[] = {&g};
+    const int cached[] = {98}, budget[] = {2};
+    const auto out = dg::RunBlocks(c, 100, gens, cached, budget, Bind(fake));
+    Check(!out[0].context_full && out[0].tokens.size() == 2 &&
+              !g.commit_pending,
+          "partial last block");
   }
 
   // Two generations share passes; cancellation stops one between passes.
