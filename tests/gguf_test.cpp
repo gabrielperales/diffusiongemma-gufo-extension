@@ -67,6 +67,16 @@ int main() {
   Check(a.eos_ids == b.eos_ids, "end tokens");
   Check(a.pad_id == b.pad_id && a.bos_id == b.bos_id, "pad and bos");
 
+  // Recorded or not, the sampler settings equal generation_config.json's.
+  const auto da = dg::LoadDiffusionDefaultsGguf(*reader);
+  const auto db = dg::LoadDiffusionDefaults(root);
+  Check(da.max_denoising_steps == db.max_denoising_steps &&
+            da.t_min == db.t_min && da.t_max == db.t_max &&
+            da.entropy_bound == db.entropy_bound &&
+            da.stability_threshold == db.stability_threshold &&
+            da.confidence_threshold == db.confidence_threshold,
+        "sampler settings");
+
   const dg::Tokenizer from_gguf(*reader);
   const dg::Tokenizer from_json{std::filesystem::path(root)};
   Check(from_gguf.vocab_size() == from_json.vocab_size(), "vocabulary size");

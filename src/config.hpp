@@ -79,6 +79,10 @@ bool IsDiffusionGemmaGguf(const core::GgufReader& reader);
 /// std::runtime_error on missing keys or an unsupported shape.
 Config LoadConfigGguf(const core::GgufReader& reader);
 
+/// The sampler settings a GGUF records (diffusion.eb_*, as the
+/// generation_config.json values); the checkpoint defaults for any it lacks.
+DiffusionDefaults LoadDiffusionDefaultsGguf(const core::GgufReader& reader);
+
 /// Throws std::runtime_error unless `config` has the one shape the kernels
 /// are written for.
 void ValidateConfig(const Config& config);

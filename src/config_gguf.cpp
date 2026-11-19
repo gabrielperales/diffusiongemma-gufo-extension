@@ -142,4 +142,29 @@ Config LoadConfigGguf(const core::GgufReader& r) {
   return c;
 }
 
+DiffusionDefaults LoadDiffusionDefaultsGguf(const core::GgufReader& r) {
+  DiffusionDefaults d;
+  const auto integer = [&](const char* key, int& out) {
+    if (const auto v = r.GetMetadataUint32(key))
+      out = static_cast<int>(*v);
+    else if (const auto v64 = r.GetMetadataUint64(key))
+      out = static_cast<int>(*v64);
+  };
+  const auto real = [&](const char* key, float& out) {
+    if (const auto v = r.GetMetadataFloat32(key))
+      out = *v;
+  };
+  integer("diffusion.eb_max_steps", d.max_denoising_steps);
+  real("diffusion.eb_t_min", d.t_min);
+  real("diffusion.eb_t_max", d.t_max);
+  real("diffusion.eb_entropy_bound", d.entropy_bound);
+  integer("diffusion.eb_stability_threshold", d.stability_threshold);
+  real("diffusion.eb_confidence_threshold", d.confidence_threshold);
+  if (d.max_denoising_steps <= 0 || d.t_min <= 0.0F || d.t_max < d.t_min ||
+      d.entropy_bound < 0.0F || d.stability_threshold < 0 ||
+      d.confidence_threshold < 0.0F)
+    throw std::runtime_error("DiffusionGemma GGUF: invalid sampler settings");
+  return d;
+}
+
 }  // namespace gufo::models::diffusion_gemma

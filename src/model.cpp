@@ -119,14 +119,14 @@ struct Model::Impl {
       : root(r), options(o) {
     std::error_code ec;
     if (std::filesystem::is_regular_file(root, ec)) {
-      // A llama.cpp GGUF: architecture and tokenizer from its metadata. It
-      // carries no generation_config.json; the defaults are its values.
+      // A llama.cpp GGUF: architecture, sampler settings and tokenizer from
+      // its metadata.
       std::string error;
       const auto reader = core::GgufReader::OpenFile(root, &error);
       if (!reader)
         throw std::runtime_error("cannot open " + root.string() + ": " + error);
       config = LoadConfigGguf(*reader);
-      defaults = DiffusionDefaults{};
+      defaults = LoadDiffusionDefaultsGguf(*reader);
       tokenizer = std::make_unique<Tokenizer>(*reader);
     } else {
       config = LoadConfig(root);
