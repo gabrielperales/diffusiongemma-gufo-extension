@@ -1,0 +1,131 @@
+name: CI
+
+# Tests every push and pull request. On main, a CHANGELOG.md version without
+# a tag is tagged vX.Y.Z and released once the tests pass.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # The Gufo revision this extension is built and tested against (README.md).
+  GUFO_REF: v0.35.0
+
+jobs:
+  changelog:
+    name: Check CHANGELOG.md and extension.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: version
+        run: |
+          python3 tools/changelog.py check
+          echo "version=$(python3 tools/changelog.py latest)" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: CPU tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out the extension
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: extension
+          persist-credentials: false
+
+      - name: Check out Gufo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gufo-org/gufo
+          ref: ${{ env.GUFO_REF }}
+          path: gufo
+          persist-credentials: false
+
+      # Gufo's development shell carries ROCm and its other toolchains.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+
+      - name: Restore compiler cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ env.GUFO_REF }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ env.GUFO_REF }}-
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+        with:
+          determinate: false
+          extra-conf: |
+            extra-substituters = https://gufo.cachix.org
+            extra-trusted-public-keys = gufo.cachix.org-1:rfZe3n4lHINgyoACKzs5EthIZmBNvEyCCtufUpth0PE=
+
+      - name: Build and run the CPU tests
+        working-directory: gufo
+        env:
+          EXTENSION_DIR: ${{ github.workspace }}/extension
+        run: |
+          # shellcheck disable=SC2016 # expanded by the inner shell
+          nix develop --command bash -euo pipefail -c '
+            export CCACHE_DIR="$HOME/.cache/ccache"
+            cmake --preset cpu-test -DGUFO_EXTENSION_DIRS="$EXTENSION_DIR"
+            cmake --build --preset cpu-test --parallel "$(nproc)" --target \
+              diffusion_gemma_config_test diffusion_gemma_chat_test \
+              diffusion_gemma_tokenizer_test diffusion_gemma_denoise_test \
+              diffusion_gemma_cache_state_test diffusion_gemma_image_chat_test \
+              diffusion_gemma_block_test diffusion_gemma_gguf_test \
+              diffusion_gemma_tool_dialect_test
+            ctest --preset cpu-test -R "^diffusion_gemma\." --no-tests=error
+          '
+
+  release:
+    name: Tag and release
+    needs: [ changelog, test ]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Tag and release the CHANGELOG.md version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.changelog.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists; nothing to release"
+            exit 0
+          fi
+          python3 tools/changelog.py notes "$VERSION" > "$RUNNER_TEMP/notes.md"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Release $tag" "$GITHUB_SHA"
+          git push origin "refs/tags/$tag"
+          gh release create "$tag" --verify-tag --title "$tag" \
+            --notes-file "$RUNNER_TEMP/notes.md"
