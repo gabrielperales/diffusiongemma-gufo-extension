@@ -38,10 +38,33 @@ jobs:
           python3 tools/changelog.py check
           echo "version=$(python3 tools/changelog.py latest)" >> "$GITHUB_OUTPUT"
 
+  # cpu builds and runs the host tests. hip compiles the GPU library, the
+  # text runner and the GPU tests for gfx1151 without running them: hosted
+  # runners have no GPU.
   test:
-    name: CPU tests
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: CPU tests
+            preset: cpu-test
+            run-tests: true
+            targets: >-
+              diffusion_gemma_config_test diffusion_gemma_chat_test
+              diffusion_gemma_tokenizer_test diffusion_gemma_denoise_test
+              diffusion_gemma_cache_state_test diffusion_gemma_image_chat_test
+              diffusion_gemma_block_test diffusion_gemma_gguf_test
+              diffusion_gemma_tool_dialect_test
+          - name: HIP build (gfx1151)
+            preset: gpu-test
+            run-tests: false
+            targets: >-
+              gufo_diffusion_gemma_hip gufo_diffusion_gemma_text
+              diffusion_gemma_kernels_hip_test diffusion_gemma_nvfp4_gguf_test
+              diffusion_gemma_run
     steps:
       - name: Check out the extension
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -68,9 +91,9 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ccache
-          key: ccache-${{ runner.os }}-${{ env.GUFO_REF }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ccache-${{ runner.os }}-${{ matrix.preset }}-${{ env.GUFO_REF }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            ccache-${{ runner.os }}-${{ env.GUFO_REF }}-
+            ccache-${{ runner.os }}-${{ matrix.preset }}-${{ env.GUFO_REF }}-
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
@@ -80,27 +103,223 @@ jobs:
             extra-substituters = https://gufo.cachix.org
             extra-trusted-public-keys = gufo.cachix.org-1:rfZe3n4lHINgyoACKzs5EthIZmBNvEyCCtufUpth0PE=
 
-      - name: Build and run the CPU tests
+      - name: Build
         working-directory: gufo
         env:
           EXTENSION_DIR: ${{ github.workspace }}/extension
+          PRESET: ${{ matrix.preset }}
+          TARGETS: ${{ matrix.targets }}
         run: |
           # shellcheck disable=SC2016 # expanded by the inner shell
           nix develop --command bash -euo pipefail -c '
             export CCACHE_DIR="$HOME/.cache/ccache"
-            cmake --preset cpu-test -DGUFO_EXTENSION_DIRS="$EXTENSION_DIR"
-            cmake --build --preset cpu-test --parallel "$(nproc)" --target \
-              diffusion_gemma_config_test diffusion_gemma_chat_test \
-              diffusion_gemma_tokenizer_test diffusion_gemma_denoise_test \
-              diffusion_gemma_cache_state_test diffusion_gemma_image_chat_test \
-              diffusion_gemma_block_test diffusion_gemma_gguf_test \
-              diffusion_gemma_tool_dialect_test
-            ctest --preset cpu-test -R "^diffusion_gemma\." --no-tests=error
+            cmake --preset "$PRESET" -DGUFO_EXTENSION_DIRS="$EXTENSION_DIR"
+            # shellcheck disable=SC2086 # TARGETS is a list
+            cmake --build --preset "$PRESET" --parallel "$(nproc)" --target $TARGETS
           '
+
+      - name: Run the tests
+        if: matrix.run-tests
+        working-directory: gufo
+        run: |
+          nix develop --command \
+            ctest --preset cpu-test -R '^diffusion_gemma\.' --no-tests=error
+
+  # Builds every target of the extension on Windows with Gufo's toolchain
+  # (MSVC host, TheRock HIP SDK, vcpkg) and runs the CPU tests. The toolchain
+  # steps follow Gufo's .github/workflows/windows-build.yml at GUFO_REF,
+  # without its NPU designs and packaging.
+  windows:
+    name: Windows build and CPU tests
+    runs-on: windows-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: gufo
+    env:
+      SDK_TARBALL: therock-dist-windows-gfx1151-10.0.0.tar.gz
+      SDK_URL: https://github.com/endyjasmi/gufo/releases/download/toolchain/therock-10.0.0/therock-dist-windows-gfx1151-10.0.0.tar.gz
+      SDK_SHA256: 1293927b06b3b8d4bd7e0265823fb998bc9e0d83c68f33dcfa5d32663b30ce38
+      # Forward slashes: CMake reads backslashes in -D values as escapes.
+      SDK_ROOT: C:/TheRock/build
+      XRT_SDK_URL: https://github.com/Xilinx/XRT/releases/download/2.21.75/xrt_windows_sdk.zip
+      XRT_SDK_SHA256: ccc244c2c423588972ade76142cdc01049477aaa39a35be97e782b97eb7c5295
+      XRT_ROOT: C:/xrt
+    steps:
+      - name: Check out the extension
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: extension
+          persist-credentials: false
+
+      - name: Check out Gufo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gufo-org/gufo
+          ref: ${{ env.GUFO_REF }}
+          path: gufo
+          persist-credentials: false
+
+      - name: Restore TheRock SDK archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\therock-archive
+          key: therock-${{ env.SDK_TARBALL }}
+
+      - name: Install the TheRock SDK
+        run: |
+          $archive = "$env:RUNNER_TEMP\therock-archive\$env:SDK_TARBALL"
+          New-Item -ItemType Directory -Force -Path (Split-Path $archive), $env:SDK_ROOT | Out-Null
+          if (-not (Test-Path $archive)) {
+            curl.exe --fail --location --retry 3 --no-progress-meter --output "$archive.part" $env:SDK_URL
+            if ($LASTEXITCODE -ne 0) { throw "cannot download $env:SDK_TARBALL" }
+            Move-Item "$archive.part" $archive
+          }
+          $sha = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          if ($sha -ne $env:SDK_SHA256) { throw "$env:SDK_TARBALL has sha256 $sha, expected $env:SDK_SHA256" }
+          tar -xzf $archive -C $env:SDK_ROOT
+          if ($LASTEXITCODE -ne 0) { throw "cannot unpack $env:SDK_TARBALL" }
+          "HIP_PATH=$env:SDK_ROOT" >> $env:GITHUB_ENV
+          ($env:SDK_ROOT -replace '/', '\') + '\bin' >> $env:GITHUB_PATH
+
+      # MSVC 14.40+ clashes with clang's HIP math headers.
+      - name: Patch the HIP SDK math headers
+        run: python tools/windows/patch_sdk_math.py $env:SDK_ROOT
+
+      - name: Set up the MSVC x64 environment
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'no Visual Studio installation with the x64 VC toolset was found' }
+          $bat = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          $before = @{}
+          foreach ($line in (cmd /s /c 'set')) {
+            if ($line -match '^([^=]+)=(.*)$') { $before[$Matches[1]] = $Matches[2] }
+          }
+          foreach ($line in (cmd /s /c "call `"$bat`" >NUL 2>&1 && set")) {
+            if ($line -notmatch '^([^=]+)=(.*)$') { continue }
+            if ($before.ContainsKey($Matches[1]) -and $before[$Matches[1]] -eq $Matches[2]) { continue }
+            "$($Matches[1])=$($Matches[2])" >> $env:GITHUB_ENV
+          }
+
+      - name: Install Ninja and ccache
+        run: |
+          choco install ninja ccache -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'cannot install ninja and ccache' }
+
+      - name: Restore compiler cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\ccache
+          key: ccache-windows-${{ env.GUFO_REF }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-windows-${{ env.GUFO_REF }}-
+
+      - name: Prepare compiler cache
+        run: |
+          "CCACHE_DIR=$env:RUNNER_TEMP\ccache" >> $env:GITHUB_ENV
+          "CCACHE_BASEDIR=$env:GITHUB_WORKSPACE" >> $env:GITHUB_ENV
+          "CCACHE_COMPILERCHECK=string:$env:SDK_TARBALL" >> $env:GITHUB_ENV
+          "CCACHE_MAXSIZE=2G" >> $env:GITHUB_ENV
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\vcpkg-archives
+          key: vcpkg-windows-${{ hashFiles('gufo/vcpkg.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            vcpkg-windows-${{ hashFiles('gufo/vcpkg.json') }}-
+
+      # A full clone: the manifest baseline resolves through vcpkg's history.
+      - name: Prepare vcpkg
+        run: |
+          git clone --quiet https://github.com/microsoft/vcpkg.git C:\vcpkg-gufo
+          if ($LASTEXITCODE -ne 0) { throw 'cannot clone vcpkg' }
+          & C:\vcpkg-gufo\bootstrap-vcpkg.bat -disableMetrics
+          if ($LASTEXITCODE -ne 0) { throw 'cannot bootstrap vcpkg' }
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\vcpkg-archives" | Out-Null
+          "VCPKG_ROOT=C:\vcpkg-gufo" >> $env:GITHUB_ENV
+          "VCPKG_DEFAULT_BINARY_CACHE=$env:RUNNER_TEMP\vcpkg-archives" >> $env:GITHUB_ENV
+
+      # Gufo links LLVM OpenMP with the ABI name TheRock imports.
+      - name: Check out LLVM OpenMP
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: llvm/llvm-project
+          ref: 3b5b5c1ec4a3095ab096dd780e84d7ab81f3d7ff # llvmorg-18.1.8
+          path: gufo/build/llvm-project
+          sparse-checkout: |
+            cmake
+            llvm/cmake
+            openmp
+          persist-credentials: false
+
+      - name: Build LLVM OpenMP
+        run: |
+          $clang = Get-ChildItem "$env:SDK_ROOT/lib/llvm/bin" -Filter '*clang-cl.exe' | Select-Object -First 1
+          if (-not $clang) { throw 'SDK clang-cl not found' }
+          cmake -S build/llvm-project/openmp -B build/openmp -G Ninja `
+            "-DCMAKE_C_COMPILER=$($clang.FullName)" "-DCMAKE_CXX_COMPILER=$($clang.FullName)" `
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache `
+            -DCMAKE_BUILD_TYPE=Release -DOPENMP_MSVC_NAME_SCHEME=ON `
+            -DOPENMP_ENABLE_LIBOMPTARGET=OFF -DLIBOMP_OMPT_SUPPORT=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'OpenMP configure failed' }
+          cmake --build build/openmp --parallel $env:NUMBER_OF_PROCESSORS --target omp ompimp
+          if ($LASTEXITCODE -ne 0) { throw 'OpenMP build failed' }
+          New-Item -ItemType Directory -Force build/windows-release | Out-Null
+          Copy-Item build/openmp/runtime/src/libomp140.x86_64.dll build/windows-release
+
+      # Configure needs XRT's headers even without the NPU.
+      - name: Install the XRT SDK
+        run: |
+          $archive = "$env:RUNNER_TEMP\xrt_windows_sdk.zip"
+          curl.exe --fail --location --retry 3 --no-progress-meter --output $archive $env:XRT_SDK_URL
+          if ($LASTEXITCODE -ne 0) { throw 'cannot download the XRT SDK' }
+          $sha = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          if ($sha -ne $env:XRT_SDK_SHA256) { throw "XRT SDK has sha256 $sha, expected $env:XRT_SDK_SHA256" }
+          New-Item -ItemType Directory -Force $env:XRT_ROOT | Out-Null
+          tar -xf $archive -C $env:XRT_ROOT
+          if ($LASTEXITCODE -ne 0) { throw 'cannot unpack the XRT SDK' }
+          "XRT_DIR=$env:XRT_ROOT/xrt_sdk/xrt/share/cmake/XRT" >> $env:GITHUB_ENV
+
+      - name: Configure
+        run: |
+          $extension = "$env:GITHUB_WORKSPACE/extension" -replace '\\', '/'
+          python tools/windows/check_extension_packages.py --root "$PWD" --extension-dir $extension
+          if ($LASTEXITCODE -ne 0) { throw 'extension dependencies are missing from the vcpkg manifest' }
+          # ccache cannot cache objects that write a shared /Zi PDB.
+          cmake --preset windows-release -DBUILD_TESTING=ON "-DCMAKE_HIP_COMPILER_ROCM_ROOT=$env:SDK_ROOT" `
+            -DCMAKE_POLICY_DEFAULT_CMP0141=NEW -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded `
+            -DOpenMP_CXX_LIB_NAMES=libomp "-DOpenMP_libomp_LIBRARY=$PWD/build/openmp/runtime/src/libomp.lib" `
+            "-DOpenMP_CXX_INCLUDE_DIR=$PWD/build/openmp/runtime/src" "-DXRT_DIR=$env:XRT_DIR" `
+            -DGUFO_EXTENSIONS_FROM_LOCK=OFF "-DGUFO_EXTENSION_DIRS=$extension"
+          if ($LASTEXITCODE -ne 0) { throw 'configure failed' }
+          "$PWD\build\windows-release\vcpkg_installed\x64-windows-release\bin" >> $env:GITHUB_PATH
+          "$PWD\build\windows-release" >> $env:GITHUB_PATH
+
+      - name: Build
+        run: |
+          $targets = @(
+            'gufo_diffusion_gemma_hip', 'gufo_diffusion_gemma_text',
+            'diffusion_gemma_kernels_hip_test', 'diffusion_gemma_nvfp4_gguf_test', 'diffusion_gemma_run',
+            'diffusion_gemma_config_test', 'diffusion_gemma_chat_test', 'diffusion_gemma_tokenizer_test',
+            'diffusion_gemma_denoise_test', 'diffusion_gemma_cache_state_test',
+            'diffusion_gemma_image_chat_test', 'diffusion_gemma_block_test',
+            'diffusion_gemma_gguf_test', 'diffusion_gemma_tool_dialect_test')
+          cmake --build --preset windows-release --parallel $env:NUMBER_OF_PROCESSORS --target @targets
+          if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+          ccache --show-stats
+
+      - name: Run the CPU tests
+        run: |
+          ctest --test-dir build/windows-release -L cpu -R '^diffusion_gemma\.' `
+            --output-on-failure --no-tests=error --timeout 120
+          if ($LASTEXITCODE -ne 0) { throw 'CPU tests failed' }
 
   release:
     name: Tag and release
-    needs: [ changelog, test ]
+    needs: [ changelog, test, windows ]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
