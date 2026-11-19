@@ -1,0 +1,8 @@
+This extension ports the DiffusionGemma and Gemma 4 code of Bubo
+(https://github.com/haloforge-labs/bubo, Halowin Bubo by HaloForge Labs),
+a fork of Gufo, under the MIT License ("Copyright (c) 2026 gufo
+contributors"). Ported files keep their structure; changes adapt them to the
+public Gufo extension API.
+
+Model weights are not part of this repository. DiffusionGemma weights carry
+their own license (see the model card of the checkpoint you use).
