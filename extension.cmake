@@ -87,6 +87,8 @@ gufo_extension_target(
     # <openssl/evp.h>; gufo_ext_core carries OpenSSL::Crypto and the hasher.
     gufo_ext_core
     gufo_ext_runtime
+    hip::host
+    Threads::Threads
 )
 
 if(TARGET gufo_diffusion_gemma_text)
