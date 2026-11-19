@@ -42,6 +42,7 @@ gufo_extension_target(
     src/weights_gguf.cpp
     src/weights_fp8.cpp
     src/weights_nvfp4.cpp
+    src/model.cpp
     src/engine.cpp
   LINK_LIBRARIES
     gufo_diffusion_gemma
