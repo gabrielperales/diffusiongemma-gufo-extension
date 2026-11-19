@@ -101,16 +101,7 @@ Config LoadConfig(const std::filesystem::path& root) {
   c.global_rotary_fraction =
       static_cast<float>(Member(global, "partial_rotary_factor").as_double());
 
-  // The kernels are specialised for exactly this model.
-  Expect(c.hidden == 2816 && c.heads == 16 && c.sliding_head_dim == 256 &&
-             c.global_head_dim == 512 && c.sliding_kv_heads == 8 &&
-             c.global_kv_heads == 2,
-         "attention shape");
-  Expect(c.intermediate == 2112 && c.expert_intermediate == 704 &&
-             c.experts == 128 && c.top_k == 8,
-         "feed-forward shape");
-  Expect(c.canvas == 256, "canvas length");
-  Expect(c.vocab == 262144, "vocabulary size");
+  ValidateConfig(c);
 
   if (std::filesystem::exists(root / "generation_config.json")) {
     const auto generation = ReadJson(root / "generation_config.json");
@@ -122,6 +113,21 @@ Config LoadConfig(const std::filesystem::path& root) {
   if (c.eos_ids.empty())
     c.eos_ids = {1, 106};
   return c;
+}
+
+void ValidateConfig(const Config& c) {
+  // The kernels are specialised for exactly this model.
+  Expect(c.layers > 0 && static_cast<int>(c.is_global.size()) == c.layers,
+         "layer types");
+  Expect(c.hidden == 2816 && c.heads == 16 && c.sliding_head_dim == 256 &&
+             c.global_head_dim == 512 && c.sliding_kv_heads == 8 &&
+             c.global_kv_heads == 2,
+         "attention shape");
+  Expect(c.intermediate == 2112 && c.expert_intermediate == 704 &&
+             c.experts == 128 && c.top_k == 8,
+         "feed-forward shape");
+  Expect(c.canvas == 256, "canvas length");
+  Expect(c.vocab == 262144, "vocabulary size");
 }
 
 DiffusionDefaults LoadDiffusionDefaults(const std::filesystem::path& root) {

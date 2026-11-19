@@ -6,7 +6,9 @@
 #include <queue>
 #include <sstream>
 #include <stdexcept>
+#include <variant>
 
+#include <gufo/ext/gguf_reader.hpp>
 #include <gufo/ext/json.hpp>
 
 namespace gufo::models::diffusion_gemma {
@@ -115,6 +117,75 @@ Tokenizer::Tokenizer(const std::filesystem::path& root) {
   byte_value_.resize(pieces_.size(), -1);
   special_.resize(pieces_.size(), false);
   // Longest first, so a scan takes the longest match at each position.
+  std::sort(added_.begin(), added_.end(), [](const auto& a, const auto& b) {
+    return a.first.size() > b.first.size();
+  });
+}
+
+Tokenizer::Tokenizer(const core::GgufReader& reader) {
+  if (reader.GetMetadataString("tokenizer.ggml.model").value_or("") !=
+      "gemma4")
+    throw std::runtime_error("GGUF tokenizer is not gemma4");
+  const auto tokens = reader.GetMetadataStringArray("tokenizer.ggml.tokens");
+  const auto merges = reader.GetMetadataStringArray("tokenizer.ggml.merges");
+  const auto* types_value = reader.FindMetadata("tokenizer.ggml.token_type");
+  const auto* types =
+      types_value ? std::get_if<std::vector<std::int64_t>>(&types_value->value)
+                  : nullptr;
+  std::vector<std::int64_t> converted;
+  if (types == nullptr && types_value != nullptr)
+    if (const auto* u =
+            std::get_if<std::vector<std::uint64_t>>(&types_value->value)) {
+      converted.assign(u->begin(), u->end());
+      types = &converted;
+    }
+  if (tokens.empty() || types == nullptr || types->size() != tokens.size())
+    throw std::runtime_error("GGUF tokenizer: tokens and types do not match");
+
+  pieces_.assign(tokens.begin(), tokens.end());
+  vocab_.reserve(pieces_.size() * 2);
+  for (std::size_t id = 0; id < pieces_.size(); ++id)
+    vocab_.emplace(pieces_[id], static_cast<std::int32_t>(id));
+
+  byte_value_.assign(pieces_.size(), -1);
+  for (int b = 0; b < 256; ++b) {
+    char name[8];
+    std::snprintf(name, sizeof(name), "<0x%02X>", b);
+    const auto found = vocab_.find(name);
+    if (found == vocab_.end())
+      throw std::runtime_error("GGUF tokenizer: missing byte token");
+    byte_ids_[b] = found->second;
+    byte_value_[found->second] = static_cast<std::int16_t>(b);
+  }
+
+  merges_.reserve(merges.size() * 2);
+  for (std::size_t rank = 0; rank < merges.size(); ++rank) {
+    const auto text = merges[rank];
+    const auto space = text.find(' ');
+    if (space == std::string_view::npos)
+      continue;
+    const std::string left(text.substr(0, space)),
+        right(text.substr(space + 1));
+    const auto l = vocab_.find(left), r = vocab_.find(right),
+               m = vocab_.find(left + right);
+    if (l == vocab_.end() || r == vocab_.end() || m == vocab_.end())
+      continue;
+    merges_.emplace(PairKey(l->second, r->second),
+                    (static_cast<std::uint64_t>(rank) << 32) |
+                        static_cast<std::uint32_t>(m->second));
+  }
+
+  // llama.cpp token type 3 is a control token: matched before BPE, and
+  // dropped when decoding with skip_special.
+  constexpr std::int64_t kControl = 3;
+  special_.assign(pieces_.size(), false);
+  for (std::size_t id = 0; id < pieces_.size(); ++id) {
+    if ((*types)[id] != kControl || pieces_[id] == "<s>" ||
+        pieces_[id] == "</s>")
+      continue;
+    added_.emplace_back(pieces_[id], static_cast<std::int32_t>(id));
+    special_[id] = true;
+  }
   std::sort(added_.begin(), added_.end(), [](const auto& a, const auto& b) {
     return a.first.size() > b.first.size();
   });

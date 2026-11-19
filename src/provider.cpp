@@ -13,6 +13,7 @@ void diffusion_gemma_provider_register(gufo::ext::Registry& registry) {
   registry.AddTextProvider({
       .id = "diffusiongemma-26b-a4b",
       .probe = &gufo::models::diffusion_gemma::ProbeDiffusionGemma,
+      .probe_gguf = &gufo::models::diffusion_gemma::ProbeDiffusionGemmaGguf,
       .create = &gufo::models::diffusion_gemma::CreateDiffusionGemmaRunner,
   });
 }

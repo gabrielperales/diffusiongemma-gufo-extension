@@ -10,6 +10,10 @@
 #include <unordered_map>
 #include <vector>
 
+namespace gufo::core {
+class GgufReader;
+}
+
 namespace gufo::models::diffusion_gemma {
 
 /// Gemma 4 tokenizer from tokenizer.json: added tokens matched first
@@ -19,6 +23,11 @@ namespace gufo::models::diffusion_gemma {
 class Tokenizer {
 public:
   explicit Tokenizer(const std::filesystem::path& root);
+  /// The same tokenizer from a llama.cpp GGUF's tokenizer.ggml.* metadata:
+  /// tokens, merges and token types. Control tokens are the added tokens of
+  /// tokenizer.json, except <s> and </s>, which the GGUF marks as control
+  /// but the checkpoint's tokenizer encodes as text.
+  explicit Tokenizer(const core::GgufReader& reader);
 
   [[nodiscard]] std::vector<std::int32_t> Encode(std::string_view text) const;
   /// Concatenated token text. Special (added) tokens are dropped when

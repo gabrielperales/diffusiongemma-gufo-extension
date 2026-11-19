@@ -5,6 +5,8 @@
 
 #include "src/config.hpp"
 
+#include <gufo/ext/gguf_reader.hpp>
+
 namespace gufo::models::diffusion_gemma {
 
 bool ProbeDiffusionGemma(std::string_view model_root) {
@@ -15,6 +17,17 @@ bool ProbeDiffusionGemma(std::string_view model_root) {
   // loader would reject it, so the probe declines rather than claim it.
   try {
     (void)LoadConfig(root);
+    return true;
+  } catch (const std::exception&) {
+    return false;
+  }
+}
+
+bool ProbeDiffusionGemmaGguf(const core::GgufReader& reader) {
+  if (!IsDiffusionGemmaGguf(reader))
+    return false;
+  try {
+    (void)LoadConfigGguf(reader);
     return true;
   } catch (const std::exception&) {
     return false;

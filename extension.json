@@ -66,6 +66,12 @@
       ],
       "role": "test"
     },
+    "diffusion_gemma_gguf_test": {
+      "requires": [
+        "testing"
+      ],
+      "role": "test"
+    },
     "diffusion_gemma_kernels_hip_test": {
       "requires": [
         "hip",
@@ -86,6 +92,7 @@
       "id": "diffusiongemma-26b-a4b",
       "capability": "text_generation",
       "keys": [
+        "gguf:diffusion-gemma",
         "safetensors:diffusion_gemma",
         "safetensors:DiffusionGemmaForBlockDiffusion"
       ],

@@ -12,6 +12,7 @@ void RegisterDiffusionGemmaCpu(ext::Registry& registry) {
   registry.AddTextProvider({
       .id = "diffusiongemma-26b-a4b",
       .probe = &ProbeDiffusionGemma,
+      .probe_gguf = &ProbeDiffusionGemmaGguf,
       .create = nullptr,
   });
 }

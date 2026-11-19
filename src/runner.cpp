@@ -17,6 +17,8 @@
 #include <fstream>
 #include <iterator>
 #include <gufo/ext/component_cache_resources.hpp>
+#include <gufo/ext/gguf_identity.hpp>
+#include <gufo/ext/gguf_reader.hpp>
 #include <gufo/ext/host_budget.hpp>
 #include <gufo/ext/json.hpp>
 #include <gufo/ext/sampling.hpp>
@@ -561,17 +563,46 @@ std::shared_ptr<ext::TextModelRunner> CreateDiffusionGemmaRunner(
     // The continuation cache restores prefixes itself.
     model_options.reuse_history = 0;
     model_options.stage_prompts = true;
-    const auto config = LoadConfig(root);
+    // A llama.cpp GGUF (what `gufo serve llm` opens) or a checkpoint
+    // directory (the safetensors layout Bubo serves).
+    std::error_code ec;
+    const bool gguf = std::filesystem::is_regular_file(root, ec);
+    std::shared_ptr<const core::GgufReader> reader = options.reader;
+    if (gguf && !reader) {
+      std::string open_error;
+      auto opened = core::GgufReader::OpenFile(root, &open_error);
+      if (!opened)
+        return fail(open_error);
+      reader = std::move(opened);
+    }
+    const auto config = gguf ? LoadConfigGguf(*reader) : LoadConfig(root);
     std::uint32_t context = options.max_context;
     if (context == 0)
       context = 131072;
     context = std::min<std::uint32_t>(
         context, static_cast<std::uint32_t>(config.max_positions));
     model_options.max_context = static_cast<int>(context);
+    // A durable (disk) cache needs the content identity of the files.
+    // Hashing a GGUF reads all of it, so without a disk cache the loaded
+    // model instance is the identity, as in the LFM3 extension.
+    std::string identity;
+    if (!gguf) {
+      identity = "checkpoint-sha256:" + ArtifactIdentity(root);
+    } else if (!options.disk_cache.directory.empty()) {
+      identity = options.disk_cache.model_artifact_fingerprint.empty()
+                     ? core::GgufIdentityHex(*reader)
+                     : options.disk_cache.model_artifact_fingerprint;
+      identity = std::string(core::kGgufIdentityScheme) + ':' + identity;
+    }
     auto model = std::make_shared<Model>(root, model_options);
     context = static_cast<std::uint32_t>(model->options().max_context);
+    if (identity.empty()) {
+      std::ostringstream process;
+      process << "process-model:" << model.get();
+      identity = process.str();
+    }
     return std::make_shared<Runner>(std::move(model), context,
-                                    ArtifactIdentity(root));
+                                    std::move(identity));
   } catch (const std::exception& e) {
     return fail(e.what());
   }

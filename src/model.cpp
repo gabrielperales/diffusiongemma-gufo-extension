@@ -1,5 +1,7 @@
 #include "src/model.hpp"
 
+#include <gufo/ext/gguf_reader.hpp>
+
 #include <hip/hip_runtime_api.h>
 
 #include <algorithm>
@@ -115,9 +117,22 @@ struct Model::Impl {
 
   Impl(const std::filesystem::path& r, const ModelOptions& o)
       : root(r), options(o) {
-    config = LoadConfig(root);
-    defaults = LoadDiffusionDefaults(root);
-    tokenizer = std::make_unique<Tokenizer>(root);
+    std::error_code ec;
+    if (std::filesystem::is_regular_file(root, ec)) {
+      // A llama.cpp GGUF: architecture and tokenizer from its metadata. It
+      // carries no generation_config.json; the defaults are its values.
+      std::string error;
+      const auto reader = core::GgufReader::OpenFile(root, &error);
+      if (!reader)
+        throw std::runtime_error("cannot open " + root.string() + ": " + error);
+      config = LoadConfigGguf(*reader);
+      defaults = DiffusionDefaults{};
+      tokenizer = std::make_unique<Tokenizer>(*reader);
+    } else {
+      config = LoadConfig(root);
+      defaults = LoadDiffusionDefaults(root);
+      tokenizer = std::make_unique<Tokenizer>(root);
+    }
     options.max_batch = std::max(1, options.max_batch);
     options.reuse_history = std::max(0, options.reuse_history);
     options.prefill_chunk =

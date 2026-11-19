@@ -6,6 +6,10 @@
 #include <filesystem>
 #include <vector>
 
+namespace gufo::core {
+class GgufReader;
+}
+
 namespace gufo::models::diffusion_gemma {
 
 /// Text architecture of google/diffusiongemma-26B-A4B-it. One set of layer
@@ -62,6 +66,22 @@ DiffusionDefaults LoadDiffusionDefaults(const std::filesystem::path& root);
 
 /// True when `root` is a DiffusionGemma checkpoint directory.
 bool IsDiffusionGemmaDirectory(const std::filesystem::path& root);
+
+/// The architecture llama.cpp writes in DiffusionGemma GGUFs.
+inline constexpr const char* kGgufArchitecture = "diffusion-gemma";
+
+/// True when the GGUF holds a DiffusionGemma model.
+bool IsDiffusionGemmaGguf(const core::GgufReader& reader);
+
+/// The architecture from a llama.cpp DiffusionGemma GGUF's metadata. The end
+/// tokens are the checkpoint's generation_config.json set (end of sequence,
+/// end of turn and tool response), found by name in the vocabulary. Throws
+/// std::runtime_error on missing keys or an unsupported shape.
+Config LoadConfigGguf(const core::GgufReader& reader);
+
+/// Throws std::runtime_error unless `config` has the one shape the kernels
+/// are written for.
+void ValidateConfig(const Config& config);
 
 }  // namespace gufo::models::diffusion_gemma
 

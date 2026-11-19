@@ -41,6 +41,8 @@ struct Step {
 
 std::filesystem::path FindGgufWeights(const std::filesystem::path& root) {
   std::error_code ec;
+  if (std::filesystem::is_regular_file(root, ec))
+    return root.extension() == ".gguf" ? root : std::filesystem::path{};
   if (std::filesystem::exists(root / "model.safetensors.index.json", ec) ||
       std::filesystem::exists(root / "model.safetensors", ec))
     return {};
