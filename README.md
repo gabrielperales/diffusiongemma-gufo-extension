@@ -11,7 +11,7 @@ directory but does not run it yet.
 
 | | |
 | --- | --- |
-| Gufo | v0.35.0 (extension API 0.3.21) |
+| Gufo | v0.35.0 (extension API 0.3.20) |
 | Platforms | Windows x86-64 (native, primary), Linux |
 | Weights | `nvidia/diffusiongemma-26B-A4B-it-NVFP4` safetensors + Gemma 4 vision `mmproj-*-BF16.gguf` |
 | Maintainer | _to be named_ |
