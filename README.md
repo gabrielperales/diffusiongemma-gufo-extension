@@ -19,6 +19,7 @@ a Gufo fork by HaloForge Labs that runs DiffusionGemma natively on Windows
 | Platforms | Windows x86-64, gfx1151: tested. Linux: builds and passes CPU tests; not run on a GPU |
 | Weights | NVIDIA's NVFP4 checkpoint packed into a GGUF (recommended), or a llama.cpp Q8_0 GGUF |
 | Maintainer | [@gabrielperales](https://github.com/gabrielperales) |
+| Releases | [CHANGELOG.md](CHANGELOG.md); CI tags and releases each new version merged to `main` |
 | License | MIT (code). Weights: Apache 2.0 and the Gemma Terms of Use |
 
 ## How it works
