@@ -14,6 +14,7 @@ gufo_extension_target(
     src/denoise.cpp
     src/cache_state.cpp
     src/image_prompt.cpp
+    src/read.cpp
     src/extension.cpp
   LINK_LIBRARIES
     gufo_ext_runtime
@@ -28,15 +29,54 @@ if(TARGET gufo_diffusion_gemma)
   endif()
 endif()
 
-# GPU runner and the text provider (phases 3-4).
+# GPU engine: kernels, weight loading (NVFP4, FP8, GGUF) and the
+# block-diffusion engine. The kernels are written for explicit FP32
+# arithmetic and BF16 boundaries, so contraction stays off. clang-cl ignores
+# GCC-style options without the /clang: prefix that GUFO_CLANG_OPTION adds.
+gufo_extension_target(
+  NAME gufo_diffusion_gemma_hip
+  SOURCES
+    src/profiler.cpp
+    src/upload.cpp
+    src/weights.cpp
+    src/weights_gguf.cpp
+    src/weights_fp8.cpp
+    src/weights_nvfp4.cpp
+    src/engine.cpp
+  LINK_LIBRARIES
+    gufo_diffusion_gemma
+    gufo_ext_runtime
+    hip::host
+    Threads::Threads
+)
+
+if(TARGET gufo_diffusion_gemma_hip)
+  gufo_extension_hip_sources(gufo_diffusion_gemma_hip
+    SOURCES
+      src/kernels.hip
+      src/attention.hip
+      src/moe.hip
+      src/soft_embed.hip
+      src/dense.hip
+  )
+  target_compile_options(gufo_diffusion_gemma_hip PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:-O3>
+    $<$<COMPILE_LANGUAGE:HIP>:-O3;${GUFO_CLANG_OPTION}-ffp-contract=off;-Wno-unused-command-line-argument>
+  )
+  target_include_directories(gufo_diffusion_gemma_hip PUBLIC
+    "$<BUILD_INTERFACE:${GUFO_EXTENSION_BUILD_ROOT}>"
+  )
+endif()
+
+# The text provider (phase 4 adds the runner and drivers).
 gufo_extension_target(
   NAME gufo_diffusion_gemma_text
   SOURCES
     src/provider.cpp
   LINK_LIBRARIES
+    gufo_diffusion_gemma_hip
     gufo_diffusion_gemma
     gufo_ext_runtime
-    hip::host
 )
 
 if(TARGET gufo_diffusion_gemma_text)
@@ -70,6 +110,36 @@ foreach(_dg_test config chat tokenizer denoise cache_state image_chat)
       LABELS "diffusion-gemma;cpu" SKIP_RETURN_CODE 77)
   endif()
 endforeach()
+
+# GPU tests and the standalone runner (reference comparisons with Bubo).
+gufo_extension_target(
+  NAME diffusion_gemma_kernels_hip_test
+  SOURCES
+    tests/kernels_hip_test.cpp
+  LINK_LIBRARIES
+    gufo_diffusion_gemma_hip
+    gufo_diffusion_gemma
+    gufo_ext_runtime
+    ${_gufo_diffusion_gemma_test_libs}
+)
+
+if(TARGET diffusion_gemma_kernels_hip_test)
+  add_test(NAME diffusion_gemma.kernels_hip
+    COMMAND diffusion_gemma_kernels_hip_test)
+  set_tests_properties(diffusion_gemma.kernels_hip PROPERTIES
+    LABELS "diffusion-gemma;hip;gpu;gfx1151" SKIP_RETURN_CODE 77)
+endif()
+
+gufo_extension_target(
+  NAME diffusion_gemma_run
+  SOURCES
+    tools/diffusion_gemma_run.cpp
+  LINK_LIBRARIES
+    gufo_diffusion_gemma_hip
+    gufo_diffusion_gemma
+    gufo_ext_runtime
+    ${_gufo_diffusion_gemma_test_libs}
+)
 
 install(FILES
   "${GUFO_EXTENSION_BUILD_ROOT}/LICENSE"
